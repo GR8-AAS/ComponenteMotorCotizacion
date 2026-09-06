@@ -117,6 +117,22 @@ El servicio está desplegado como 3 instancias independientes en Vercel:
 
 Cada una con las mismas 5 variables de entorno configuradas en el dashboard de Vercel (nunca en el repositorio). Pasos completos para replicar el despliegue en [`DESPLIEGUE-VERCEL.md`](./DESPLIEGUE-VERCEL.md).
 
+## Rendimiento y latencia
+
+Al medir el endpoint en producción se detectaron tiempos de respuesta iniciales de **~1.9s**, altos para 3 consultas `SELECT` simples. Investigación y fixes aplicados:
+
+**Índices:** revisados y descartados como causa. Las 3 tablas (`personas_finanzas`, `mortalidad`, `producto_seguro`) ya tienen índice automático en la columna consultada, porque esa columna es su `PRIMARY KEY`. No se necesitó agregar ninguno.
+
+**Causa real — 2 fixes de conexión a la base de datos:**
+
+| Cambio | Efecto medido |
+|---|---|
+| Estado inicial: cada una de las 3 consultas (`persona`, `mortalidad`, `producto`) abría y cerraba su propia conexión a Supabase | ~1.9s |
+| Fix 1: reutilizar una sola conexión para las 3 consultas de un mismo request | ~1.0s |
+| Fix 2: cachear la conexión a nivel de módulo para reutilizarla también entre invocaciones "calientes" de la función serverless (con reintento automático si el pooler la cerró por inactividad) | **~0.5s** en peticiones que caen en un contenedor caliente; la primera petición a un contenedor frío sigue costando ~1s |
+
+**Causa raíz restante (no resuelta, limitación del plan):** la función de Vercel corre en `iad1` (Virginia, costa este de EE.UU.), pero la base de datos Supabase está en `aws-0-us-west-2` (Oregón, costa oeste) — cada ida y vuelta a la base paga latencia transcontinental. Fijar la región de la función cerca de la base eliminaría esto, pero requiere plan Pro de Vercel (el proyecto usa el plan free por ser un experimento). Queda documentado como limitación conocida.
+
 ## Alcance del experimento
 
 Este repositorio implementa **solo** el motor de cálculo (las 3 réplicas). No implementa el servicio votante ni la lógica de comparación/consenso entre las 3 respuestas — eso se construye en un componente aparte. Todos los datos son sintéticos; esto no es un modelo actuarial real.
