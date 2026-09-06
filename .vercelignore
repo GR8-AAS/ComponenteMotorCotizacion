@@ -1,0 +1,7 @@
+.venv
+tests
+.pytest_cache
+*.md
+*.sql
+.env
+scripts_apply_seed.py
