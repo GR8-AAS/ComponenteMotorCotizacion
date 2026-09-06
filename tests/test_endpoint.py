@@ -23,6 +23,19 @@ def auth_headers(token=None):
     return {"Authorization": f"Bearer {token or token_valido()}"}
 
 
+class _FakeConn:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+@pytest.fixture(autouse=True)
+def fake_db_connection(monkeypatch):
+    monkeypatch.setattr("app.routes.get_connection", lambda: _FakeConn())
+
+
 PERSONA = {
     "identificacion": "990000000023",
     "fecha_nacimiento": date(1986, 9, 5),
@@ -45,10 +58,10 @@ PRODUCTO = {
 
 def test_motor_calculo_devuelve_valor_correcto(client, monkeypatch):
     monkeypatch.setattr(Config, "FAULT_INJECTION_ENABLED", False)
-    monkeypatch.setattr("app.routes.obtener_persona", lambda ident: PERSONA)
+    monkeypatch.setattr("app.routes.obtener_persona", lambda conn, ident: PERSONA)
     monkeypatch.setattr("app.routes.calcular_edad", lambda fecha: 40)
-    monkeypatch.setattr("app.routes.obtener_mortalidad", lambda edad: MORTALIDAD)
-    monkeypatch.setattr("app.routes.obtener_producto", lambda: PRODUCTO)
+    monkeypatch.setattr("app.routes.obtener_mortalidad", lambda conn, edad: MORTALIDAD)
+    monkeypatch.setattr("app.routes.obtener_producto", lambda conn: PRODUCTO)
 
     resp = client.get("/motor-calculo/990000000023", headers=auth_headers())
 
@@ -61,7 +74,7 @@ def test_motor_calculo_devuelve_valor_correcto(client, monkeypatch):
 
 
 def test_motor_calculo_404_si_no_existe(client, monkeypatch):
-    monkeypatch.setattr("app.routes.obtener_persona", lambda ident: None)
+    monkeypatch.setattr("app.routes.obtener_persona", lambda conn, ident: None)
 
     resp = client.get("/motor-calculo/000000000000", headers=auth_headers())
 
@@ -69,9 +82,9 @@ def test_motor_calculo_404_si_no_existe(client, monkeypatch):
 
 
 def test_motor_calculo_404_si_no_hay_mortalidad_para_la_edad(client, monkeypatch):
-    monkeypatch.setattr("app.routes.obtener_persona", lambda ident: PERSONA)
+    monkeypatch.setattr("app.routes.obtener_persona", lambda conn, ident: PERSONA)
     monkeypatch.setattr("app.routes.calcular_edad", lambda fecha: 17)
-    monkeypatch.setattr("app.routes.obtener_mortalidad", lambda edad: None)
+    monkeypatch.setattr("app.routes.obtener_mortalidad", lambda conn, edad: None)
 
     resp = client.get("/motor-calculo/990000000001", headers=auth_headers())
 
@@ -102,10 +115,10 @@ def test_motor_calculo_401_token_expirado(client):
 
 
 def test_motor_calculo_200_token_sin_expiracion(client, monkeypatch):
-    monkeypatch.setattr("app.routes.obtener_persona", lambda ident: PERSONA)
+    monkeypatch.setattr("app.routes.obtener_persona", lambda conn, ident: PERSONA)
     monkeypatch.setattr("app.routes.calcular_edad", lambda fecha: 40)
-    monkeypatch.setattr("app.routes.obtener_mortalidad", lambda edad: MORTALIDAD)
-    monkeypatch.setattr("app.routes.obtener_producto", lambda: PRODUCTO)
+    monkeypatch.setattr("app.routes.obtener_mortalidad", lambda conn, edad: MORTALIDAD)
+    monkeypatch.setattr("app.routes.obtener_producto", lambda conn: PRODUCTO)
 
     resp = client.get("/motor-calculo/990000000023", headers=auth_headers())
 
@@ -121,10 +134,10 @@ def test_health_no_requiere_token(client):
 def test_motor_calculo_con_fallo_mantiene_formato_y_200(client, monkeypatch):
     monkeypatch.setattr(Config, "FAULT_INJECTION_ENABLED", True)
     monkeypatch.setattr(Config, "FAULT_PROBABILITY", "1.0")
-    monkeypatch.setattr("app.routes.obtener_persona", lambda ident: PERSONA)
+    monkeypatch.setattr("app.routes.obtener_persona", lambda conn, ident: PERSONA)
     monkeypatch.setattr("app.routes.calcular_edad", lambda fecha: 40)
-    monkeypatch.setattr("app.routes.obtener_mortalidad", lambda edad: MORTALIDAD)
-    monkeypatch.setattr("app.routes.obtener_producto", lambda: PRODUCTO)
+    monkeypatch.setattr("app.routes.obtener_mortalidad", lambda conn, edad: MORTALIDAD)
+    monkeypatch.setattr("app.routes.obtener_producto", lambda conn: PRODUCTO)
 
     resp = client.get("/motor-calculo/990000000023", headers=auth_headers())
 

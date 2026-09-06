@@ -9,7 +9,7 @@ def get_connection():
     return psycopg2.connect(dsn)
 
 
-def obtener_persona(identificacion: str) -> dict | None:
+def obtener_persona(conn, identificacion: str) -> dict | None:
     query = """
         SELECT
           identificacion,
@@ -20,14 +20,13 @@ def obtener_persona(identificacion: str) -> dict | None:
         FROM public.personas_finanzas
         WHERE identificacion = %s;
     """
-    with get_connection() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(query, (identificacion,))
-            row = cur.fetchone()
-            return dict(row) if row else None
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(query, (identificacion,))
+        row = cur.fetchone()
+        return dict(row) if row else None
 
 
-def obtener_mortalidad(edad: int) -> dict | None:
+def obtener_mortalidad(conn, edad: int) -> dict | None:
     query = """
         SELECT
           edad,
@@ -35,14 +34,13 @@ def obtener_mortalidad(edad: int) -> dict | None:
         FROM public.mortalidad
         WHERE edad = %s;
     """
-    with get_connection() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(query, (edad,))
-            row = cur.fetchone()
-            return dict(row) if row else None
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(query, (edad,))
+        row = cur.fetchone()
+        return dict(row) if row else None
 
 
-def obtener_producto(codigo: str = "VIDA_EXPERIMENTO") -> dict | None:
+def obtener_producto(conn, codigo: str = "VIDA_EXPERIMENTO") -> dict | None:
     query = """
         SELECT
           codigo,
@@ -54,8 +52,7 @@ def obtener_producto(codigo: str = "VIDA_EXPERIMENTO") -> dict | None:
         FROM public.producto_seguro
         WHERE codigo = %s;
     """
-    with get_connection() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(query, (codigo,))
-            row = cur.fetchone()
-            return dict(row) if row else None
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(query, (codigo,))
+        row = cur.fetchone()
+        return dict(row) if row else None
