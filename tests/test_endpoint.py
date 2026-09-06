@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import jwt
+import psycopg2
 import pytest
 
 from app import create_app
@@ -23,17 +24,9 @@ def auth_headers(token=None):
     return {"Authorization": f"Bearer {token or token_valido()}"}
 
 
-class _FakeConn:
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc_info):
-        return False
-
-
 @pytest.fixture(autouse=True)
 def fake_db_connection(monkeypatch):
-    monkeypatch.setattr("app.routes.get_connection", lambda: _FakeConn())
+    monkeypatch.setattr("app.routes.get_connection", lambda: object())
 
 
 PERSONA = {
@@ -129,6 +122,29 @@ def test_health_no_requiere_token(client):
     resp = client.get("/health")
 
     assert resp.status_code == 200
+
+
+def test_motor_calculo_reintenta_si_la_conexion_esta_rota(client, monkeypatch):
+    llamadas = {"n": 0}
+
+    def obtener_persona_falla_una_vez(conn, ident):
+        llamadas["n"] += 1
+        if llamadas["n"] == 1:
+            raise psycopg2.OperationalError("conexión cerrada por el pooler")
+        return PERSONA
+
+    reset_calls = []
+    monkeypatch.setattr("app.routes.reset_connection", lambda: reset_calls.append(1))
+    monkeypatch.setattr("app.routes.obtener_persona", obtener_persona_falla_una_vez)
+    monkeypatch.setattr("app.routes.calcular_edad", lambda fecha: 40)
+    monkeypatch.setattr("app.routes.obtener_mortalidad", lambda conn, edad: MORTALIDAD)
+    monkeypatch.setattr("app.routes.obtener_producto", lambda conn: PRODUCTO)
+
+    resp = client.get("/motor-calculo/990000000023", headers=auth_headers())
+
+    assert resp.status_code == 200
+    assert llamadas["n"] == 2
+    assert reset_calls == [1]
 
 
 def test_motor_calculo_con_fallo_mantiene_formato_y_200(client, monkeypatch):

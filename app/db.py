@@ -3,10 +3,30 @@ import psycopg2.extras
 
 from app.config import Config
 
+_conn = None
+
 
 def get_connection():
-    dsn = Config.DATABASE_URL.split("?")[0]
-    return psycopg2.connect(dsn)
+    """Reutiliza la conexión entre invocaciones "calientes" de la función
+    serverless para evitar pagar el handshake TCP/TLS en cada request."""
+    global _conn
+    if _conn is None or _conn.closed:
+        dsn = Config.DATABASE_URL.split("?")[0]
+        _conn = psycopg2.connect(dsn)
+        _conn.autocommit = True
+    return _conn
+
+
+def reset_connection():
+    """Descarta la conexión cacheada cuando resultó estar rota (ej. el pooler
+    la cerró por inactividad); la siguiente llamada a get_connection() abre una nueva."""
+    global _conn
+    if _conn is not None:
+        try:
+            _conn.close()
+        except psycopg2.Error:
+            pass
+    _conn = None
 
 
 def obtener_persona(conn, identificacion: str) -> dict | None:
